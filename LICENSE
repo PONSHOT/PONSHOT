@@ -1,0 +1,14 @@
+This repository is not under a single licence.
+
+  packages/contracts/     GPL-2.0-or-later   (see LICENSE-GPL)
+  everything else         MIT                (see LICENSE-MIT)
+
+The split is not a preference. The Solidity in `packages/contracts` incorporates Uniswap
+V3 library code — `TickMath.sol` and `Oracle.sol` are GPL-2.0-or-later — so the contracts
+that build on them inherit that licence and cannot be redistributed under MIT. Every file
+carries its own SPDX identifier, which governs.
+
+The off-chain applications and shared packages link none of that code and remain MIT.
+
+`docs/THIRD_PARTY_NOTICES.md` records what was vendored, from which commit, and under
+which terms.

@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push: {branches: [main]}
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: {version: stable}
+      - name: Restore contract dependencies
+        run: scripts/restore-contract-deps.sh
+
+      - name: forge fmt --check
+        run: forge fmt --check
+        working-directory: packages/contracts
+
+      - name: forge build
+        run: forge build --sizes
+        working-directory: packages/contracts
+
+      # Fork suites are excluded here: they need network access and a cached RPC.
+      # They run in the `fork` job below, which is allowed to fail on a fork PR.
+      - name: forge test
+        run: forge test --no-match-path 'test/fork/*' -vv
+        working-directory: packages/contracts
+        env: {FOUNDRY_PROFILE: ci}
+
+      - name: forge coverage
+        run: |
+          forge coverage --no-match-path 'test/fork/*' --report summary --report lcov \
+            --ir-minimum
+        working-directory: packages/contracts
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: packages/contracts/lcov.info
+          if-no-files-found: ignore
+
+  offchain:
+    name: Apps and packages
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pons
+          POSTGRES_PASSWORD: pons
+          POSTGRES_DB: pons
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pons"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: {version: stable}
+      - name: Restore contract dependencies
+        run: scripts/restore-contract-deps.sh
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+
+      - run: npm ci
+
+      # ABIs are generated from build output. Regenerating and diffing turns a signature
+      # change that nobody propagated into a build failure rather than a silent decode bug.
+      - name: Build contracts and sync ABIs
+        run: |
+          (cd packages/contracts && forge build)
+          npm run abi
+          git diff --exit-code packages/sdk/src/abis \
+            || { echo "::error::Generated ABIs are out of date. Run 'npm run abi' and commit."; exit 1; }
+
+      - name: Typecheck
+        run: npm run typecheck --workspaces --if-present
+
+      - name: Unit tests
+        run: npx vitest run packages/sdk
+
+      - name: Indexer migrations apply cleanly
+        run: npx tsx src/migrate.ts
+        working-directory: apps/indexer
+        env: {DATABASE_URL: 'postgres://pons:pons@localhost:5432/pons'}
+
+      # ESLint CLI rather than `next lint`, which is deprecated and removed in Next 16.
+      - name: Frontend lint
+        run: npx eslint src --max-warnings 0
+        working-directory: apps/web
+
+      - name: Frontend production build
+        run: npx next build
+        working-directory: apps/web
+        env:
+          NEXT_PUBLIC_CHAIN_ID: '4663'
+          NEXT_PUBLIC_PREDICTION_ADDRESS: '0x0000000000000000000000000000000000000001'
+          NEXT_PUBLIC_ORACLE_ADDRESS: '0x0000000000000000000000000000000000000002'
+
+  end_to_end:
+    name: End-to-end simulation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: {version: stable}
+      - name: Restore contract dependencies
+        run: scripts/restore-contract-deps.sh
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: (cd packages/contracts && forge build) && npm run abi
+
+      # The scenario the brief requires, end to end against a real chain process:
+      # entries, lock, rolling rounds, settlement, claims, refusals, burn accounting.
+      # Every step asserts, so a regression anywhere in the stack fails here.
+      - name: Local stack + simulation
+        run: scripts/dev-up.sh --simulate
+
+  fork:
+    name: Fork checks against chain 4663
+    runs-on: ubuntu-latest
+    # Live-network checks: informative, but a network hiccup must not block a merge.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+        with: {version: stable}
+      - name: Restore contract dependencies
+        run: scripts/restore-contract-deps.sh
+
+      - name: Verify on-chain assumptions
+        run: forge test --mc PonsOracleFork -vv
+        working-directory: packages/contracts
+        # REQUIRE_FORK turns a silent skip into a failure: a fork job that cannot reach
+        # the chain must not report success for having verified nothing.
+        env: {ROBINHOOD_RPC: 'https://rpc.mainnet.chain.robinhood.com', REQUIRE_FORK: 'true'}
+
+      # Trading against the real pool reads a lot of storage; a local fork caches it.
+      - name: Live market and manipulation cost
+        working-directory: packages/contracts
+        env: {ROBINHOOD_RPC: 'http://127.0.0.1:8546', REQUIRE_FORK: 'true'}
+        run: |
+          anvil --fork-url https://rpc.mainnet.chain.robinhood.com --port 8546 --silent &
+          for _ in $(seq 1 40); do cast chain-id --rpc-url http://127.0.0.1:8546 >/dev/null 2>&1 && break; sleep 1; done
+          forge test --mc LiveMarketFork -vv
+          forge test --mc ManipulationCost -vv
