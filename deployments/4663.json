@@ -1,0 +1,15 @@
+{
+  "PONS": "0x39dBED3a2bd333467115dE45665cC57F813C4571",
+  "PONSWETHPool": "0x10CC6BD38112cAc182db90B6a71d8Bb5939526bA",
+  "PONSWETHPoolSecond": "0xEd50bDeeA8aDC232f159486192a4157281D722ff",
+  "PonsOracleAdapter": "0x5aBD0f26f1A5e7B24E1bb4De50513a31D3cb0D33",
+  "PonsPrediction": "0xC463621052E57Cfa2F8CDA86ee337d8d9aD4dBD0",
+  "WETH": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  "bufferSeconds": 1800,
+  "chainId": 4663,
+  "deployedAt": 1788461272,
+  "deployedAtBlock": 53636175,
+  "roundInterval": 900,
+  "treasuryFeeBps": 300,
+  "twapWindow": 300
+}

@@ -1,0 +1,32 @@
+# Local dependencies for the off-chain services.
+#
+# The chain itself is not here: `scripts/dev-up.sh` runs Anvil directly, because the
+# simulation drives its clock with `evm_increaseTime` and needs a fresh chain per run.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pons
+      POSTGRES_PASSWORD: pons
+      POSTGRES_DB: pons
+    ports: ['55432:5432']
+    volumes: ['pons-pg:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pons']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    # Optional. The keeper uses it only as a single-writer lock and fails open without it,
+    # because a Redis outage must never stop rounds from settling.
+    image: redis:7-alpine
+    ports: ['56379:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pons-pg:
