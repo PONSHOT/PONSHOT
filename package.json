@@ -1,0 +1,37 @@
+{
+  "name": "pons-prediction",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Round-based PONS/WETH prediction market on Robinhood Chain",
+  "license": "GPL-2.0-or-later",
+  "workspaces": [
+    "packages/config",
+    "packages/sdk",
+    "apps/keeper",
+    "apps/indexer",
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "contracts:deps": "scripts/restore-contract-deps.sh",
+    "contracts:build": "npm run contracts:deps && cd packages/contracts && forge build",
+    "contracts:test": "npm run contracts:deps && cd packages/contracts && forge test --no-match-path \"test/fork/*\"",
+    "contracts:fmt": "cd packages/contracts && forge fmt --check",
+    "abi": "node scripts/sync-abis.mjs",
+    "audit:onchain": "python3 tools/onchain-audit/observations.py",
+    "dev": "bash scripts/dev-up.sh"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
