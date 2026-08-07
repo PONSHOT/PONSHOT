@@ -1,0 +1,60 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+script = "script"
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 1000
+via_ir = false
+evm_version = "cancun"
+bytecode_hash = "none"
+cbor_metadata = false
+fs_permissions = [
+    {access = "read-write", path = "./"},
+    {access = "read-write", path = "../../deployments"},
+    {access = "read", path = "../config"},
+]
+gas_reports = ["PonsPrediction", "UniswapV3PonsOracle"]
+ffi = false
+
+[profile.default.fuzz]
+runs = 512
+max_test_rejects = 200000
+
+[profile.default.invariant]
+runs = 128
+depth = 64
+fail_on_revert = false
+shrink_run_limit = 2000
+
+[profile.ci.fuzz]
+runs = 2048
+
+[profile.ci.invariant]
+runs = 512
+depth = 128
+
+[profile.lite]
+optimizer = false
+
+[fmt]
+# Vendored Uniswap sources must stay byte-identical to upstream so their provenance
+# headers remain checkable; reformatting them would defeat that.
+ignore = ["src/vendor/**"]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
+multiline_func_header = "attributes_first"
+quote_style = "double"
+number_underscore = "thousands"
+sort_imports = true
+
+[rpc_endpoints]
+robinhood = "${ROBINHOOD_RPC}"
+robinhood_testnet = "${ROBINHOOD_TESTNET_RPC}"
+
+[etherscan]
+robinhood = { key = "${BLOCKSCOUT_API_KEY}", url = "https://robinhoodchain.blockscout.com/api", chain = 4663 }
