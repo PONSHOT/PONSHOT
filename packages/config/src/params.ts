@@ -1,0 +1,133 @@
+/**
+ * Launch parameters, and the measurements behind each one.
+ *
+ * Every number here is derived from what the live PONS/WETH pool actually does, not from
+ * a formula or a round figure. The measurements live in
+ * `packages/contracts/test/fork/ManipulationCost.t.sol` and
+ * `tools/onchain-audit/observations.py`, and are written up in
+ * `docs/TWAP_ANALYSIS.md` and `docs/MANIPULATION_ANALYSIS.md`.
+ */
+
+/** Supported round lengths. Launch uses 300s; the contract accepts 60s..1d. */
+export const SUPPORTED_INTERVALS = [60, 300, 900, 1800, 3600] as const;
+export type RoundInterval = (typeof SUPPORTED_INTERVALS)[number];
+
+export const LAUNCH_INTERVAL_SECONDS = 300;
+
+/**
+ * TWAP averaging window for settlement: **300 seconds**, equal to the round interval.
+ *
+ * The brief suggested starting at 60s. Measurement argues against it.
+ *
+ * Shifting a `w`-second arithmetic-mean TWAP by `S` basis points requires displacing spot
+ * by `S · w / t` bps and holding it for `t` seconds. The cheapest version of that attack
+ * holds for the whole window (`t = w`), which needs a spot displacement of exactly `S`
+ * — and the *fee* cost of that displacement does not depend on `w` at all. Measured
+ * against the real pool, a round trip costs ~198 bps of the amount swapped, so ~0.5 WETH
+ * moves spot 160 bps and ~2 WETH moves it 977 bps, whatever the window length.
+ *
+ * So a longer window does not make the fee cost higher. What it does is force the
+ * attacker to *hold* the displacement for longer, exposed the whole time to arbitrage
+ * against a visibly mispriced pool — and on a chain producing a block every ~102 ms,
+ * 300 seconds is roughly 3,000 blocks of that exposure rather than 600. That exposure is
+ * the real defence, and it is the one thing a fork cannot measure, so the window is set
+ * to maximise it rather than to a figure that merely sounds prudent.
+ *
+ * 300s is also the largest window that keeps `window <= interval`, which matters: a
+ * longer window would make a round's lock and close windows overlap, so part of the
+ * closing average would already be settled before entries even closed. At exactly the
+ * interval the two windows are contiguous and disjoint, and the question the market asks
+ * becomes a clean one — did PONS average more WETH during this round than during the
+ * previous one.
+ */
+export const LAUNCH_TWAP_WINDOW_SECONDS = 300;
+
+/**
+ * Grace period before an unpriced round may be voided: **1800 seconds**.
+ *
+ * Uniswap V3 records an observation only when a swap moves the tick, so an instant is
+ * not immediately quotable. Measured across the pool's entire 20,000-slot buffer
+ * (4.58 days of history): gaps between observations run to a median of 6s, p95 of 84s,
+ * p99 of 195s and a **maximum of 888s**. 1800s clears that worst case with room to
+ * spare, so an ordinarily quiet market can never trigger a spurious cancellation, while
+ * a genuine outage still resolves into refunds within half an hour.
+ */
+export const LAUNCH_BUFFER_SECONDS = 1800;
+
+/**
+ * Protocol fee: 10% of the pooled stake, against a contract-enforced ceiling of 10%.
+ *
+ * The fee is not revenue. All of it is routed to `PonsBuybackBurner`, which buys tokens
+ * on the open market and sends them to an unrecoverable address. The ceiling is a
+ * `constant` in the contract rather than a config value, so the guarantee a bettor
+ * relies on — a contested round always pays back at least 90% of the pot — is enforced
+ * by the code and not by governance.
+ */
+export const LAUNCH_BURN_FEE_BPS = 1000;
+export const MAX_BURN_FEE_BPS = 1000;
+
+/**
+ * How the burn allocation is split between the two buyback targets, in basis points.
+ *
+ * Half buys PONS, half buys the project token. The split is fixed at construction of the
+ * burner rather than settable, so it cannot be changed out from under ETH that has been
+ * earned but not yet spent.
+ */
+export const BURN_SHARE_PONS_BPS = 5000;
+export const BURN_SHARE_PROJECT_BPS = 5000;
+
+/**
+ * Slippage tolerance on a buyback, against the pool's own TWAP over `BURN_TWAP_WINDOW`.
+ *
+ * This is what makes `buyAndBurn` safe to leave permissionless: the floor is derived on
+ * chain from the pool, and a caller may only demand a stricter one. 5% is wide enough to
+ * clear ordinary movement between the observation window and execution, and far too
+ * narrow to make a manipulated buyback profitable.
+ */
+export const BURN_MAX_SLIPPAGE_BPS = 500;
+export const BURN_TWAP_WINDOW = 300;
+
+/**
+ * Divergence tolerance for the composite oracle, in basis points.
+ *
+ * Measured, not chosen: across ~2h of matched 300s windows on the two live PONS/WETH
+ * pools, natural divergence ran to a median of 38bp and a maximum of 72bp
+ * (`tools/onchain-audit/divergence.py`). 100bp would have refused none of those 60 rounds.
+ * Tighter and honest rounds start refunding; wider and the shift an attacker can sneak
+ * under the gate grows with it.
+ */
+export const LAUNCH_MAX_DIVERGENCE_BPS = 100;
+
+/**
+ * Exposure limits — the parameters that matter most, and the ones set most conservatively.
+ *
+ * The binding constraint is that what an attacker can *win* stays below what manipulating
+ * the oracle *costs*. In a parimutuel round the maximum extractable amount is essentially
+ * the losing pool, bounded by `maximumRoundPool`.
+ *
+ * Both figures below were measured by swapping against the real pools on a fork
+ * (`test/fork/CompositeManipulationCost.t.sol`), holding the displacement across a full
+ * 300s window:
+ *
+ * | oracle                          | cost       | shift    | cost per bp |
+ * |---------------------------------|------------|----------|-------------|
+ * | single 1% pool                  | 2.346 WETH | 1,110 bp | 0.00211 WETH |
+ * | composite, *calibrated* attack  | 1.701 WETH |   440 bp | 0.00386 WETH |
+ *
+ * So the composite costs a tuned attacker **1.83× more per basis point**. It also makes an
+ * *untuned* attack worthless: the same 2.35 WETH that moved the single-pool oracle 1,110bp
+ * pushes the pools 1,101bp apart, trips the gate, and the round refuses to price. Ratios
+ * even 15% off the mark were refused outright in the sweep.
+ *
+ * The caps therefore rise by the measured factor and no further: 1 ETH became 2 ETH, not
+ * 10. **1.83× is real but it is not transformative, and it does not make this a large
+ * market.** PONS liquidity is the binding constraint, and no oracle construction over
+ * these two pools changes that — raising the caps again needs deeper liquidity, not
+ * another aggregation trick.
+ */
+export const LAUNCH_MINIMUM_BET_WEI = 1_000_000_000_000_000n; // 0.001 ETH
+export const LAUNCH_MAXIMUM_BET_WEI = 500_000_000_000_000_000n; // 0.5 ETH
+export const LAUNCH_MAXIMUM_ROUND_POOL_WEI = 2_000_000_000_000_000_000n; // 2 ETH
+
+/** Timelock the contract applies to fee and oracle changes. */
+export const CONFIG_TIMELOCK_SECONDS = 2 * 24 * 3600;
