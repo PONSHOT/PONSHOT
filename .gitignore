@@ -141,3 +141,42 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ---- project rules ----
+node_modules/
+dist/
+out/
+cache/
+broadcast/
+.env
+.env.local
+*.log
+.next/
+coverage/
+lcov.info
+packages/contracts/out/
+packages/contracts/cache/
+packages/contracts/broadcast/
+apps/*/dist/
+apps/*/.next/
+tools/onchain-audit/*.report.json
+
+# Runtime state, not source. The keeper's file is disposable (every decision in it is
+# re-derivable from chain state) and Anvil's is a whole devnet chain.
+apps/keeper/.keeper-state.json
+.dev/
+.pm2-logs/
+
+# Local devnet deployment. Real-chain deployment files ARE committed — they are how the
+# keeper, indexer, API and web build all find the same addresses — but committing the
+# devnet's would let a local run masquerade as a deployment.
+deployments/31337.json
+
+# Generated keeper key. A private key must never reach the repository.
+.secrets/
+ecosystem.mainnet.config.cjs
+
+# Foundry dependencies. `foundry.lock` pins them and `forge build` restores them, so the
+# tree stays out of the repository rather than being vendored or carried as submodules
+# whose .git directories no longer exist.
+packages/contracts/lib/
