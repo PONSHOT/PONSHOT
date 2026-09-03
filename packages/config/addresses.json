@@ -1,0 +1,15 @@
+{
+  "_comment": "Canonical source for chain-4663 addresses. TypeScript imports this file; packages/contracts/test/fork/ConfigParity.t.sol asserts PonsAddresses.sol agrees with it. Change values here, never in one mirror only.",
+  "chainId": 4663,
+  "PONS": "0x39dBED3a2bd333467115dE45665cC57F813C4571",
+  "WETH": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  "PONS_WETH_POOL_10000": "0x10CC6BD38112cAc182db90B6a71d8Bb5939526bA",
+  "PONS_WETH_POOL_3000": "0xEd50bDeeA8aDC232f159486192a4157281D722ff",
+  "UNISWAP_V3_FACTORY": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+  "UNISWAP_V3_POSITION_MANAGER": "0x73991a25C818Bf1f1128dEAaB1492D45638DE0D3",
+  "poolFee": 10000,
+  "poolTickSpacing": 200,
+  "ponsDecimals": 18,
+  "wethDecimals": 18,
+  "ponsIsToken0": false
+}
