@@ -1,4 +1,9 @@
-# Tickwise — PONS prediction on Robinhood Chain
+# PONSHOT — PONS prediction on Robinhood Chain
+
+[![CI](https://github.com/PONSHOT/PONSHOT/actions/workflows/ci.yml/badge.svg)](https://github.com/PONSHOT/PONSHOT/actions/workflows/ci.yml)
+[![Contracts](https://img.shields.io/badge/contracts-139%20local%20%2B%2017%20fork-2ea44f)](#testing)
+[![Licence](https://img.shields.io/badge/licence-MIT%20%2F%20GPL--2.0--or--later-blue)](#licence)
+[![Chain](https://img.shields.io/badge/chain-Robinhood%204663-9be81c)](https://rpc.mainnet.chain.robinhood.com)
 
 Round-based up/down prediction on the **PONS/WETH** price, staked in native ETH and
 settled on chain from a manipulation-resistant Uniswap V3 time-weighted average.
@@ -7,9 +12,25 @@ settled on chain from a manipulation-resistant Uniswap V3 time-weighted average.
 > or with Pons. "Robinhood Chain" names the network; "PONS" names the asset the market
 > tracks.
 
-**Status: not deployed.** The contracts, services and interface are complete and tested,
-including against the live pool on a fork. No production deployment has been made, and
-[SECURITY.md](docs/SECURITY.md) explains what should happen before one is.
+## Deployed
+
+Live on Robinhood Chain (chain ID **4663**) since block **53,636,175**, 2026-09-03 18:47 UTC.
+
+| | |
+|---|---|
+| `PonsPrediction` | [`0xC463621052E57Cfa2F8CDA86ee337d8d9aD4dBD0`](deployments/4663.json) |
+| `CompositePonsOracle` | [`0x5aBD0f26f1A5e7B24E1bb4De50513a31D3cb0D33`](deployments/4663.json) |
+| PONS | `0x39dBED3a2bd333467115dE45665cC57F813C4571` |
+| PONS/WETH pools | `0x10CC6BD38112cAc182db90B6a71d8Bb5939526bA`, `0xEd50bDeeA8aDC232f159486192a4157281D722ff` |
+| Round interval | 900 s, 300 s TWAP window, 1800 s tolerance |
+| Treasury fee | 3.00% of the losing pool |
+
+Two limitations are stated rather than buried. Admin and treasury are presently a **single
+EOA** under an explicit deployment waiver — the timelocked config path and role separation
+exist so a multisig can take over without redeploying, and it should.
+[SECURITY.md](docs/SECURITY.md) carries the full list of known limitations, and
+[ADMIN.md](docs/ADMIN.md) states exactly what privileged roles can and cannot do: no role
+can change a settled outcome, seize a user's stake, or void a round capable of settling.
 
 ---
 
@@ -82,7 +103,7 @@ Full audit transcript: [PONS_MARKET.md](docs/PONS_MARKET.md).
 
 ```bash
 npm install
-npm run contracts:test          # 124 tests: unit, fuzz, invariant, integration
+npm run contracts:test          # 139 tests: unit, fuzz, invariant, integration
 
 scripts/dev-up.sh --simulate    # full local stack + the end-to-end scenario
 ```
@@ -154,10 +175,11 @@ apps/web       Next.js interface — predict, history, stats, admin
 apps/keeper    lifecycle driver: retries, nonce management, replacement txs, health
 apps/indexer   log indexer with reorg handling → PostgreSQL
 apps/api       read-only HTTP API over the read model
-packages/contracts   Foundry: PonsPrediction, UniswapV3PonsOracle, tests, deploy
+packages/contracts   Foundry: PonsPrediction, the oracles, tests, deploy scripts
 packages/config      verified chain/token/pool constants and launch parameters
 packages/sdk         generated ABIs, shared payout/price maths, viem helpers
 docs/                architecture, oracle, analyses, operations
+tools/               on-chain audit scripts used to produce the measurements
 ```
 
 ## Who can decide a winner
@@ -173,20 +195,41 @@ docs/                architecture, oracle, analyses, operations
 
 ## Testing
 
-124 contract tests, all passing:
+**139 local tests and 17 fork tests, all passing.** The counts below come from
+`forge test --summary`; the fork column is a separate run against live chain 4663.
 
-| Suite | What it covers |
+| Suite | Tests | What it covers |
+|---|--:|---|
+| `UniswapV3PonsOracleTest` | 31 | ordering both ways, decimals, negative and extreme ticks, TWAP weighting, sealing, eviction, fuzz monotonicity |
+| `CompositePonsOracleTest` | 14 | tick normalisation across orderings, the divergence gate, median selection, source outage |
+| `PonsPredictionSettlementTest` | 18 | the brief's worked example to the wei, ties, empty sides, reentrancy, hostile recipients, treasury bounds |
+| `PonsPredictionLifecycleTest` | 16 | scheduling, the boundary invariant, illegal transitions, immutability of settled rounds |
+| `PonsPredictionPermissionsTest` | 14 | what a compromised operator cannot do; timelocks; per-round terms |
+| `PonsPredictionFailureTest` | 12 | oracle outage → refunds, late prices, limits on emergency powers |
+| `PonsPredictionInvariantsTest` | 11 | solvency, ETH conservation, schedule, outcome consistency, under random action ordering |
+| `PonsPredictionBettingTest` | 10 | limits, one entry per wallet, entries closing on the clock, pause semantics |
+| `PonsPredictionFuzzTest` | 6 | payouts never exceed the pool, correct side only, monotonicity |
+| `EndToEndTest` | 5 | the brief's required scenarios through the real oracle stack |
+| `ConfigParityTest` | 2 | the Solidity address mirror and `addresses.json` agree |
+| **Local total** | **139** | |
+| `PonsOracleForkTest` | 7 | every declared address, liquidity and buffer depth, window serviceability, unsealed refusal |
+| `CompositeManipulationCostTest` | 4 | the divergence gate against both live pools; a single-pool attack neutralised |
+| `LiveMarketForkTest` | 3 | a full round against the real pool; direction; flash moves |
+| `ManipulationCostTest` | 3 | measured cost per basis point, round-trip cost, unheld displacement |
+| **Fork total** | **17** | against live chain 4663 |
+
+A skipped fork test used to report `PASS`, so a green run could mean nothing was verified.
+CI sets `REQUIRE_FORK=true`, which turns a skip into a failure.
+
+Measured rather than modelled, and reproducible with the commands in [Quick start](#quick-start):
+
+| Measurement | Result |
 |---|---|
-| `UniswapV3PonsOracle` (28) | ordering both ways, decimals, negative and extreme ticks, TWAP weighting, sealing, eviction, fuzz monotonicity |
-| `PonsPredictionLifecycle` (16) | scheduling, boundary invariant, illegal transitions, immutability of settled rounds |
-| `PonsPredictionBetting` (10) | limits, one entry per wallet, entries closing on the clock, pause semantics |
-| `PonsPredictionSettlement` (18) | the brief's worked example to the wei, ties, empty sides, reentrancy, hostile recipients, treasury bounds |
-| `PonsPredictionFailure` (11) | oracle outage → refunds, late prices, limits on emergency powers |
-| `PonsPredictionPermissions` (12) | what a compromised operator cannot do; timelocks; per-round terms |
-| `PonsPredictionFuzz` (6) | payouts never exceed the pool, correct side only, monotonicity |
-| `PonsPredictionInvariants` (11) | solvency, ETH conservation, schedule, outcome consistency, under random action ordering |
-| `EndToEnd` (5) | the brief's required scenarios through the real oracle stack |
-| Fork suites | every assumption against live chain 4663, plus measured manipulation cost |
+| Shifting a single-pool settlement TWAP | ~0.00211 WETH per basis point |
+| Same spend (2.35 WETH) against the composite oracle | gate trips, round refuses to price, attacker gains nothing |
+| Calibrated two-pool attack | 0.00386 WETH/bp — **1.83x** the single-pool cost |
+| 250 WETH round-tripped inside one second | spot moves >40%, settled TWAP moves **0 wei** |
+| Natural divergence between the two pools | median 38bp, max 72bp — the 100bp gate refused 0 of 60 honest rounds |
 
 Plus SDK tests asserting the TypeScript payout maths reproduces the contract's, flooring
 included.
@@ -211,4 +254,10 @@ included.
 
 ## Licence
 
-GPL-2.0-or-later. See [THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
+Not a single licence, and the split is not a preference. `packages/contracts` incorporates
+Uniswap V3 library code (`TickMath.sol`, `Oracle.sol`) which is GPL-2.0-or-later, so the
+contracts built on it inherit that and cannot be redistributed under MIT. Everything else
+links none of it and is MIT. Every file carries its own SPDX identifier, which governs.
+
+See [LICENSE](LICENSE), [LICENSE-GPL](LICENSE-GPL), [LICENSE-MIT](LICENSE-MIT) and
+[THIRD_PARTY_NOTICES.md](docs/THIRD_PARTY_NOTICES.md).
