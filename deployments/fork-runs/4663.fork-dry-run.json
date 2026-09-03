@@ -1,0 +1,15 @@
+{
+  "_comment": "DRY RUN ONLY - produced by running script/Deploy.s.sol against a LOCAL ANVIL FORK of chain 4663. These addresses do not exist on the real network. No production deployment has been made.",
+  "PONS": "0x39dBED3a2bd333467115dE45665cC57F813C4571",
+  "PONSWETHPool": "0x10CC6BD38112cAc182db90B6a71d8Bb5939526bA",
+  "PonsOracleAdapter": "0x512F7469BcC83089497506b5df64c6E246B39925",
+  "PonsPrediction": "0x9fD16eA9E31233279975D99D5e8Fc91dd214c7Da",
+  "WETH": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+  "bufferSeconds": 1800,
+  "chainId": 4663,
+  "deployedAt": 1788427990,
+  "deployedAtBlock": 53314502,
+  "roundInterval": 300,
+  "treasuryFeeBps": 300,
+  "twapWindow": 60
+}
