@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-base-950 text-mute-200 antialiased;
+  background-image:
+    radial-gradient(1100px 520px at 12% -12%, rgba(155, 232, 28, 0.10), transparent 62%),
+    radial-gradient(820px 420px at 92% -6%, rgba(155, 232, 28, 0.05), transparent 58%);
+  background-attachment: fixed;
+  /* Room for the fixed bottom bar so the last row is never trapped under it. */
+  padding-bottom: 5.5rem;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-base-700 bg-base-900/80 shadow-card backdrop-blur-sm;
+  }
+  .chip {
+    @apply rounded-lg border border-base-600 bg-base-800 px-3 py-1.5 text-xs font-medium
+           text-mute-300 transition-colors hover:border-up-500/60 hover:text-white;
+  }
+  .chip-on {
+    @apply border-up-500/70 bg-up-500/15 text-up-400;
+  }
+  .label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-mute-500;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+  .btn-up {
+    @apply rounded-xl bg-up-500 px-4 py-3 text-sm font-extrabold text-base-950 shadow-glow-up
+           transition-all hover:bg-up-400 active:scale-[0.99]
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none;
+  }
+  .btn-down {
+    @apply rounded-xl bg-down-500 px-4 py-3 text-sm font-bold text-white shadow-glow-down
+           transition-all hover:bg-down-400 active:scale-[0.99]
+           disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none;
+  }
+  .btn-ghost {
+    @apply rounded-xl border border-base-600 px-4 py-2.5 text-sm font-semibold text-mute-200
+           transition-colors hover:border-up-500/60 hover:text-white
+           disabled:cursor-not-allowed disabled:opacity-40;
+  }
+}
+
+/* Firefox draws a light scrollbar over the dark ground otherwise. */
+* {
+  scrollbar-color: #272d33 transparent;
+  scrollbar-width: thin;
+}
