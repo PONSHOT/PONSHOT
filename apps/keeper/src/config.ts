@@ -41,7 +41,17 @@ export interface KeeperConfig {
   /** Multiplier applied when replacing a stuck transaction, in percent. */
   replacementBumpPercent: number;
   maxAttempts: number;
-  /** Refuse to send when the operator's balance drops below this, so it fails loudly. */
+  /**
+   * Refuse to send when the operator's balance drops below this, so it fails loudly.
+   *
+   * Size it by what a send *requires*, not by what one costs. The chain rejects a
+   * transaction unless the balance covers its whole gas allowance at the fee cap, and
+   * measured here that reserve reached 0.00081 ETH while the average actually paid was
+   * 0.0000043 — most transactions use a fraction of their limit and are refunded the
+   * rest. A floor below one reserve does not prevent failures, it just relabels them:
+   * the live keeper ran with 0.0003 and produced a run of `insufficient funds` rejections
+   * while reporting itself above the floor.
+   */
   minBalanceWei: bigint;
   statePath: string;
   redisUrl?: string;
@@ -140,7 +150,8 @@ export function loadConfig(): KeeperConfig {
     txTimeoutMs: num("TX_TIMEOUT_MS", 30_000),
     replacementBumpPercent: num("REPLACEMENT_BUMP_PERCENT", 25),
     maxAttempts: num("MAX_ATTEMPTS", 5),
-    minBalanceWei: BigInt(process.env.MIN_BALANCE_WEI ?? "10000000000000000"), // 0.01 ETH
+    // 0.01 ETH: roughly twelve worst-case sends at the fee caps observed on this chain.
+    minBalanceWei: BigInt(process.env.MIN_BALANCE_WEI ?? "10000000000000000"),
     statePath: process.env.STATE_PATH ?? `${process.cwd()}/.keeper-state.json`,
     redisUrl: process.env.REDIS_URL,
     lockKey: process.env.LOCK_KEY ?? `pons-keeper:${chainId}:${prediction.toLowerCase()}`,

@@ -1,0 +1,91 @@
+/**
+ * The live Robinhood Chain (4663) stack, as pm2 runs it.
+ *
+ * Copy to `ecosystem.mainnet.config.cjs` and fill in KEEPER_PRIVATE_KEY. That copy is
+ * gitignored because it holds a key; this template is committed so the running topology
+ * is reproducible from the repository.
+ *
+ * It exists because it did not: the live processes were started ad hoc, so their
+ * environment lived only inside pm2's saved process list. Nothing in the repository
+ * recorded the RPC target, the database URL or the gas floor, and one of those was
+ * misconfigured for days without anywhere to notice it.
+ *
+ *   pm2 start ecosystem.mainnet.config.cjs
+ *   pm2 save
+ *
+ * `pm2 restart <name>` does NOT re-read this file. After editing it:
+ *   pm2 delete <name> && pm2 start ecosystem.mainnet.config.cjs --only <name>
+ */
+const ROOT = __dirname;
+const RPC = "https://rpc.mainnet.chain.robinhood.com";
+const DATABASE_URL = "postgres://pons:pons@127.0.0.1:55432/pons";
+
+// Sized by what a send REQUIRES (gas allowance x fee cap), not by what one costs.
+// Observed worst case on this chain is 0.00081 ETH; the average actually paid is
+// 0.0000043. A floor below one reserve does not prevent failures, it relabels them.
+const MIN_BALANCE_WEI = "10000000000000000"; // 0.01 ETH
+
+const base = {
+  cwd: ROOT,
+  interpreter: "none",
+  autorestart: true,
+  max_restarts: 20,
+  // A config refusal exits 78; restarting into the same wrong config just crash-loops.
+  stop_exit_codes: [78],
+};
+
+module.exports = {
+  apps: [
+    {
+      ...base,
+      name: "rh-keeper",
+      script: "npx",
+      args: "tsx src/index.ts",
+      cwd: `${ROOT}/apps/keeper`,
+      out_file: `${ROOT}/.pm2-logs/rh-keeper.out.log`,
+      error_file: `${ROOT}/.pm2-logs/rh-keeper.err.log`,
+      env: {
+        CHAIN_ID: "4663",
+        RPC_URLS: RPC,
+        HEALTH_PORT: "8787",
+        MIN_BALANCE_WEI,
+        // KEEPER_PRIVATE_KEY: read from .secrets/keeper.json — never write it here.
+      },
+    },
+    {
+      ...base,
+      name: "rh-indexer",
+      script: "npx",
+      args: "tsx src/index.ts",
+      cwd: `${ROOT}/apps/indexer`,
+      out_file: `${ROOT}/.pm2-logs/rh-indexer.out.log`,
+      error_file: `${ROOT}/.pm2-logs/rh-indexer.err.log`,
+      env: {CHAIN_ID: "4663", RPC_URLS: RPC, DATABASE_URL, HEALTH_PORT: "8788"},
+    },
+    {
+      ...base,
+      name: "rh-api",
+      script: "npx",
+      args: "tsx src/index.ts",
+      cwd: `${ROOT}/apps/api`,
+      out_file: `${ROOT}/.pm2-logs/rh-api.out.log`,
+      error_file: `${ROOT}/.pm2-logs/rh-api.err.log`,
+      env: {CHAIN_ID: "4663", RPC_URLS: RPC, DATABASE_URL, PORT: "8789"},
+    },
+    {
+      ...base,
+      name: "rh-web",
+      script: "npx",
+      args: "next start -p 8894",
+      cwd: `${ROOT}/apps/web`,
+      out_file: `${ROOT}/.pm2-logs/rh-web.out.log`,
+      error_file: `${ROOT}/.pm2-logs/rh-web.err.log`,
+      env: {
+        // Runtime proxy targets. These are read per request, so they can be corrected
+        // without a rebuild — unlike NEXT_PUBLIC_* values, which are baked at build time.
+        RPC_PROXY_TARGET: RPC,
+        API_PROXY_TARGET: "http://127.0.0.1:8789",
+      },
+    },
+  ],
+};

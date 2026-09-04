@@ -146,7 +146,12 @@ export class TxSender {
           maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
         });
 
+        // What this send *required* the account to hold: the full gas allowance at the
+        // fee cap. The chain rejects the transaction unless the balance covers it, so
+        // this — not the amount eventually paid — is what a gas reserve must be sized by.
+        const requiredWei = ((gas * 130n) / 100n) * (fees.maxFeePerGas ?? 0n);
         this.state.update((s) => {
+          if (requiredWei > BigInt(s.maxTxCostWei ?? "0")) s.maxTxCostWei = requiredWei.toString();
           s.totals.sent++;
           s.recentTxs.push({
             hash,

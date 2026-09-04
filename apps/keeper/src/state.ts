@@ -30,8 +30,17 @@ export interface KeeperState {
   handled: Record<string, string>;
   recentTxs: SentTx[];
   totals: {sent: number; confirmed: number; failed: number; replaced: number};
-  /** Cumulative gas actually paid, in wei, as a decimal string. Used for runway. */
+  /** Cumulative gas actually paid, in wei, as a decimal string. */
   gasSpentWei: string;
+  /**
+   * The most a single transaction has ever *needed*, in wei: gas limit x maxFeePerGas.
+   *
+   * Not the same as what was paid. A transaction is rejected outright unless the account
+   * can cover its full gas allowance at the fee cap, so the reserve has to be sized by
+   * what a send requires, not by what one typically costs. Measured on this chain those
+   * differ by ~190x, because most transactions use a fraction of their limit.
+   */
+  maxTxCostWei: string;
 }
 
 const EMPTY: KeeperState = {
@@ -40,6 +49,7 @@ const EMPTY: KeeperState = {
   recentTxs: [],
   totals: {sent: 0, confirmed: 0, failed: 0, replaced: 0},
   gasSpentWei: "0",
+  maxTxCostWei: "0",
 };
 
 export class StateStore {
