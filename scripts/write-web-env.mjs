@@ -15,7 +15,11 @@ import {fileURLToPath} from "node:url";
 
 // Defaults are the same-origin proxy paths served by next.config.mjs rewrites, so a
 // generated env works from any host rather than only on the machine running the stack.
-const [, , source, rpc = "/rpc", apiBase = "/api"] = process.argv;
+// Flags are stripped before positional arguments are read. They were not, and `--force`
+// landed in the `rpc` slot, so every chain read from the browser POSTed to `/--force`
+// and 404'd — the interface rendered perfectly and showed nothing.
+const flags = new Set(process.argv.slice(2).filter((a) => a.startsWith("--")));
+const [source, rpc = "/rpc", apiBase = "/api"] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 if (!source) {
   console.error("usage: write-web-env.mjs <deployment.json> [rpcUrl] [apiBase]");
   process.exit(1);
@@ -31,7 +35,7 @@ const dest = join(dirname(fileURLToPath(import.meta.url)), "..", "apps", "web", 
 // silently pointed the site at contracts that exist only on anvil. The page rendered
 // perfectly and showed nothing, which is the worst way for this to fail. A warning was
 // not enough — it scrolled past twice — so it is now a refusal.
-if (existsSync(dest) && !process.argv.includes("--force")) {
+if (existsSync(dest) && !flags.has("--force")) {
   const current = readFileSync(dest, "utf8").match(/^NEXT_PUBLIC_CHAIN_ID=(\d+)/m)?.[1];
   if (current && current !== String(d.chainId)) {
     console.error(
